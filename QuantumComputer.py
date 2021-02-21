@@ -2,18 +2,18 @@ import numpy as np
 import math
 from random import uniform as randFloat
 
+
 def get_ground_state(num_qubits):
-    if num_qubits < 1: return
+    if num_qubits < 1:
+        return
     else:
         ground_state = [1, 0]
     for i in range(1, num_qubits):
         ground_state = np.kron(ground_state, [1, 0])
     return ground_state
 
-def U3(stringsThetaPhiLambda):
-    theta = float(stringsThetaPhiLambda[0])
-    phi = float(stringsThetaPhiLambda[1])
-    lambda_ = float(stringsThetaPhiLambda[2])
+
+def U3(theta, phi, lambda_):
     _00 = math.cos(theta / 2)
     _01 = -math.e**(complex(0, lambda_)) * math.sin(theta / 2)
     _10 = math.e**(complex(0, phi)) * math.sin(theta / 2)
@@ -23,9 +23,8 @@ def U3(stringsThetaPhiLambda):
         [_10, _11]
         ])
 
+
 def get_operator(total_qubits, gate_unitary, target_qubits):
-    # If the gate is a U3 gate, gate_unitary will be the string
-    # "u3([theta], [phi], [lambda])", e.g. "u3(3.14, 0, -1.57)"
     gate = gate_unitary.lower()
     operators = []
     I = np.array([
@@ -37,20 +36,26 @@ def get_operator(total_qubits, gate_unitary, target_qubits):
         [1, 0]
         ])
     if gate in ["x", "h"] or gate[:2] == "u3":
+        # If the gate is a U3 gate, gate_unitary will be the string
+        # "u3([theta], [phi], [lambda])", e.g. "u3(3.14, 0, -1.57)"
         if gate == "x":
             U = X
         elif gate == "h":
             ir2 = 2**(-0.5)
             U = np.array([
-                [ir2, ir2],
-                [ir2,-ir2]
+                [ir2,  ir2],
+                [ir2, -ir2]
                 ])
         else:
-            U = U3(gate[3:len(gate)-1].split(", "))
+            stringParams = gate[3:len(gate)-1].split(", ")
+            theta = float(stringParams[0])
+            phi = float(stringParams[1])
+            lambda_ = float(stringParams[2])
+            U = U3(theta, phi, lambda_)
         for i in range(0, total_qubits):
-            if i in target_qubits: 
+            if i in target_qubits:
                 operators.append(U)
-            else: 
+            else:
                 operators.append(I)
         operator = operators[0]
         for i in range(1, len(operators)):
@@ -84,6 +89,7 @@ def get_operator(total_qubits, gate_unitary, target_qubits):
     else:
         return
 
+
 def run_program(initial_state, program, defaults):
     state = initial_state
     q = int(math.log(len(state), 2))
@@ -98,24 +104,29 @@ def run_program(initial_state, program, defaults):
             theta = defaults["theta"] if rawTheta == "default" else rawTheta
             phi = defaults["phi"] if rawPhi == "default" else rawPhi
             lambda_ = defaults["lambda"] if rawLambda == "default" else rawLambda
-            state = np.dot(get_operator(
-                q,
-                "u3(" + str(theta) + ", " + str(phi) + ", " + str(lambda_) + ")",
-                event["target"]
-                ), state)
+            gate = "u3("+str(theta)+","+str(phi)+", "+str(lambda_)+")"
+            operator = get_operator(q, gate, event["target"])
+            state = np.dot(operator, state)
         else:
-            state = np.dot(get_operator(q, event["gate"], event["target"]), state)
+            operator = get_operator(q, event["gate"], event["target"])
+            state = np.dot(operator, state)
     return state
+
 
 def measure_all(state_vector):
     # I used my own method of finding a random index from a list of weights.
     levels = []
-    # each "level" in levels represents the probabilities of the state vector, but stacked.
-    # Take the following quantum state: [sqrt(0.5), 0, sqrt(0.25), sqrt(0.25)].
-    # levels would be [0.5, 0.5 + 0, 0.5 + 0 + 0.25, 0.5 + 0 + 0.25 + 0.25], or [0.5, 0.5, 0.75, 1].
-    # I then generate a random float from 0 to the total weight (1). The first level (from left
-    # to right) that is greater than the random float is the chosen index. If the random float is
-    # 0.6, then the index would be 0b10 (2).
+    # Each "level" in "levels" represents the probabilities of the state vector
+    # after adding the previous levels.
+    # Take the following quantum state:
+    # [sqrt(0.4), sqrt(0.1), sqrt(0.25), sqrt(0.25)].
+    # "levels" = [0.4, 0.4 + 0.1, 0.4 + 0.1 + 0.25, 0.4 + 0.1 + 0.25 + 0.25],
+    # which is equivalent to [0.4, 0.5, 0.75, 1].
+    # I then generate a random float from 0 to the total weight (1). The first
+    # level (from left to right) that is greater than the random float is the
+    # chosen index. If the random float is 0.6, for example, then the index
+    # would be 0b10 (2) because 0.6 is greater than 0.4, greater than 0.5, but
+    # less than 0.75
     levels.append(abs(state_vector[0])**2)
     for i in range(1, len(state_vector)):
         levels.append(levels[i-1] + (abs(state_vector[i])**2))
@@ -124,23 +135,26 @@ def measure_all(state_vector):
         if (val < levels[i]):
             return i
 
+
 def dictionaryToString(dictionary):
     string = "{"
     for tag in dictionary:
         string += "\n\t\"" + tag + "\": " + str(dictionary[tag]) + ","
     return (string[:len(string)-1] + "\n}")
 
+
 def get_counts(state_vector, shots):
     counts = {}
     q = int(math.log(len(state_vector), 2))
     for i in range(0, len(state_vector)):
         bin = "{0:b}".format(i)
-        counts[(q - len(bin)) * "0" + bin] = 0 # appends 0s at the beginning
-        # of the string to show values for each qubit. Otherwise, index 3 in
-        # a three-qubit quantum state would be "11" instead of "011". "counts"
-        # is a dictionary mapping the strings of the indices to their counts.
+        counts[(q - len(bin)) * "0" + bin] = 0
+        # Appends 0s at the beginning of the string to show the combination of
+        # qubit values that is represented by the probability. Otherwise, index
+        # 3 in a three-qubit quantum state would be "11" instead of "011".
     for i in range(0, shots):
         bin = "{0:b}".format(measure_all(state_vector))
-        counts[(q - len(bin)) * "0" + bin] += 1 # adds one to the count of
-        # the index that is returned by the weighted randomizer in measure_all(vector)
+        counts[(q - len(bin)) * "0" + bin] += 1
+        # adds one to the count of the index that is returned by the weighted
+        # randomizer in measure_all(state_vector)
     return dictionaryToString(counts)

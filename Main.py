@@ -2,14 +2,17 @@ from QuantumComputer import *
 
 # global params are "default"
 # example:
-# my_circuit = [{ "gate": "u3", "params": { "theta": "default", "phi": 3.1415, "lambda": "default"}}]
+# my_circuit = [
+#   {"gate": "u3",
+#    "params": {"theta": "default", "phi": 3.1415, "lambda": "default"}}
+# ]
 
 # global params are defined here:
 defaults = {"theta": 3.1415, "phi": 1.5708, "lambda": -3.1415}
 
 my_circuit = [
-  { "gate": "u3", "params": { "theta": 1, "phi": 2, "lambda": -1 }, "target": [0] },
-  { "gate": "cx", "target": [0, 1]}
+  {"gate": "u3", "params": {"theta": 1, "phi": 2, "lambda": -1}, "target": [0]},
+  {"gate": "cx", "target": [0, 1]}
 ]
 
 # Initial state of 4 qubits: [1, 0, 0, ..., 0]
